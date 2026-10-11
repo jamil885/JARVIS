@@ -56,3 +56,53 @@ python -m ruff check jarvis_api tests
 
 ## Próximo incremento
 Diseñar migración SQL (`users`, `sessions`, `messages`, `audit_events`), autenticación local, rutas `/sessions`, adaptador `MockModelProvider`, mensajes persistentes, pruebas de reinicio y streaming.
+
+## Incremento: sesiones y mensajes persistentes (PR de desarrollo)
+
+Este incremento agrega rutas para crear/consultar sesiones y añadir/listar mensajes humanos.
+**Todavía no genera respuestas mediante un LLM** y su token compartido es solo para
+desarrollo local de un único usuario. No exponerlo a Internet.
+
+Desde la raíz del repositorio en Ubuntu:
+
+```bash
+cd infrastructure
+cp -n .env.example .env
+# Ajustar JARVIS_DB_PASSWORD en infrastructure/.env
+docker compose up -d
+cd ..
+docker compose -f infrastructure/compose.yaml exec -T postgres psql -U jarvis -d jarvis < infrastructure/migrations/0001_sessions_messages.sql
+cd services/api
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e '.[dev]'
+export JARVIS_DATABASE_URL='postgresql://jarvis:TU_CLAVE@127.0.0.1:5432/jarvis'
+export JARVIS_API_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+uvicorn jarvis_api.main:app --host 127.0.0.1 --port 8000
+```
+
+En otra terminal, usando **el mismo token** (no imprimirlo en logs):
+
+```bash
+export JARVIS_API_TOKEN='PEGA_AQUI_EL_TOKEN_DE_LA_PRIMERA_TERMINAL'
+curl -sS -X POST http://127.0.0.1:8000/api/v1/sessions \
+  -H "Authorization: Bearer $JARVIS_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Primera conversación"}'
+```
+
+La respuesta contiene el `id` de sesión. Para añadir un mensaje, sustituye
+`SESSION_UUID` por ese ID y genera `client_message_id` con `python -c 'import uuid; print(uuid.uuid4())'`:
+
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/v1/sessions/SESSION_UUID/messages \
+  -H "Authorization: Bearer $JARVIS_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"client_message_id":"MESSAGE_UUID","content":"Hola JARVIS"}'
+curl -sS -H "Authorization: Bearer $JARVIS_API_TOKEN" \
+  http://127.0.0.1:8000/api/v1/sessions/SESSION_UUID/messages
+```
+
+Los reintentos con el mismo `client_message_id` y contenido devuelven el mensaje existente.
+Reutilizarlo con contenido distinto produce 409. Este primer esquema no maneja aún
+propietarios, usuarios múltiples, roles avanzados ni límites de recursos completos.
