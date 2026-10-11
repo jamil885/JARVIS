@@ -7,6 +7,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from jarvis_api.sessions import router as sessions_router
+
 
 class ErrorDetail(BaseModel):
     code: str
@@ -25,6 +27,8 @@ def create_app() -> FastAPI:
         yield
 
     app = FastAPI(title="JARVIS API", version="0.0.1", lifespan=lifespan)
+
+    app.include_router(sessions_router)
 
     @app.middleware("http")
     async def request_identity(request: Request, call_next):
@@ -47,10 +51,9 @@ def create_app() -> FastAPI:
                 "request_id": request.state.request_id, "retryable": True}})
         try:
             import psycopg
-            with psycopg.connect(database_url, connect_timeout=2) as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT 1")
-                    cur.fetchone()
+            with psycopg.connect(database_url, connect_timeout=2) as conn, conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.fetchone()
         except psycopg.Error:
             return JSONResponse(status_code=503, content={"error": {
                 "code": "DATABASE_UNAVAILABLE", "message": "La base de datos no está disponible",
