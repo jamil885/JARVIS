@@ -47,10 +47,9 @@ def create_app() -> FastAPI:
                 "request_id": request.state.request_id, "retryable": True}})
         try:
             import psycopg
-            with psycopg.connect(database_url, connect_timeout=2) as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT 1")
-                    cur.fetchone()
+            with psycopg.connect(database_url, connect_timeout=2) as conn, conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.fetchone()
         except psycopg.Error:
             return JSONResponse(status_code=503, content={"error": {
                 "code": "DATABASE_UNAVAILABLE", "message": "La base de datos no está disponible",
