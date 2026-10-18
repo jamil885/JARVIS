@@ -5,7 +5,6 @@ package httpapi
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"net/http"
 )
 
